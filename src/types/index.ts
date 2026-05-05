@@ -4,6 +4,7 @@ export interface User {
   display_name: string;
   public_key?: string;
   wrapped_private_key?: string;
+  wrapped_private_key_iv?: string;
   pbkdf2_salt?: string;
   created_at?: string;
 }
