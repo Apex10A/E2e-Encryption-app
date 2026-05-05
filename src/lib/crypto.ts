@@ -16,6 +16,14 @@ const base64ToArrayBuffer = (base64: string): ArrayBuffer => {
   return bytes.buffer;
 };
 
+const textToBuffer = (text: string): ArrayBuffer => {
+  return new TextEncoder().encode(text);
+};
+
+const bufferToText = (buffer: ArrayBuffer): string => {
+  return new TextDecoder().decode(buffer);
+};
+
 export const generateKeyPair = async (): Promise<CryptoKeyPair> => {
   return crypto.subtle.generateKey(
     {
@@ -46,4 +54,86 @@ export const importPublicKey = async (base64: string): Promise<CryptoKey> => {
     true,
     ['encrypt']
   );
+};
+
+export const encryptMessage = async (
+  plaintext: string,
+  recipientPublicKey: CryptoKey
+): Promise<{ encryptedContent: string; encryptedKey: string; iv: string }> => {
+  const aesKey = await crypto.subtle.generateKey(
+    {
+      name: 'AES-GCM',
+      length: 256,
+    },
+    true,
+    ['encrypt']
+  );
+
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encryptedContentBuffer = await crypto.subtle.encrypt(
+    {
+      name: 'AES-GCM',
+      iv,
+    },
+    aesKey,
+    textToBuffer(plaintext)
+  );
+
+  const exportedAesKey = await crypto.subtle.exportKey('raw', aesKey);
+  const encryptedKeyBuffer = await crypto.subtle.encrypt(
+    {
+      name: 'RSA-OAEP',
+    },
+    recipientPublicKey,
+    exportedAesKey
+  );
+
+  return {
+    encryptedContent: arrayBufferToBase64(encryptedContentBuffer),
+    encryptedKey: arrayBufferToBase64(encryptedKeyBuffer),
+    iv: arrayBufferToBase64(iv),
+  };
+};
+
+export const decryptMessage = async (
+  encryptedContent: string,
+  encryptedKey: string,
+  iv: string,
+  privateKey: CryptoKey
+): Promise<string> => {
+  try {
+    const encryptedKeyBuffer = base64ToArrayBuffer(encryptedKey);
+    const aesKeyBuffer = await crypto.subtle.decrypt(
+      {
+        name: 'RSA-OAEP',
+      },
+      privateKey,
+      encryptedKeyBuffer
+    );
+
+    const aesKey = await crypto.subtle.importKey(
+      'raw',
+      aesKeyBuffer,
+      'AES-GCM',
+      true,
+      ['decrypt']
+    );
+
+    const encryptedContentBuffer = base64ToArrayBuffer(encryptedContent);
+    const ivBuffer = base64ToArrayBuffer(iv);
+
+    const decryptedBuffer = await crypto.subtle.decrypt(
+      {
+        name: 'AES-GCM',
+        iv: new Uint8Array(ivBuffer),
+      },
+      aesKey,
+      encryptedContentBuffer
+    );
+
+    return bufferToText(decryptedBuffer);
+  } catch (error) {
+    console.error('Decryption failed:', error);
+    return '[Decryption failed]';
+  }
 };
