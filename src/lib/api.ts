@@ -6,7 +6,7 @@ async function apiFetch<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+  const token = typeof window !== 'undefined' ? sessionStorage.getItem('access_token') : null;
 
   const headers = {
     'Content-Type': 'application/json',
@@ -21,8 +21,8 @@ async function apiFetch<T>(
 
   if (response.status === 401) {
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
+      sessionStorage.removeItem('access_token');
+      sessionStorage.removeItem('refresh_token');
       window.location.href = '/login';
     }
     throw new Error('Unauthorized');
@@ -30,7 +30,18 @@ async function apiFetch<T>(
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
-    throw new Error(errorData.detail || 'API request failed');
+    let errorMessage = 'API request failed';
+    
+    if (typeof errorData.detail === 'string') {
+      errorMessage = errorData.detail;
+    } else if (Array.isArray(errorData.detail)) {
+      // Handle Pydantic validation errors
+      errorMessage = errorData.detail.map((err: any) => err.msg).join(', ');
+    } else if (errorData.message) {
+      errorMessage = errorData.message;
+    }
+    
+    throw new Error(errorMessage);
   }
 
   return response.json();

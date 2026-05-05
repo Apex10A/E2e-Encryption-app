@@ -56,6 +56,77 @@ export const importPublicKey = async (base64: string): Promise<CryptoKey> => {
   );
 };
 
+export const generateSalt = (): string => {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  return arrayBufferToBase64(salt.buffer);  // ← add .buffer here
+};
+
+export const deriveWrappingKey = async (password: string, saltBase64: string): Promise<CryptoKey> => {
+  const salt = base64ToArrayBuffer(saltBase64);
+  const passwordBuffer = textToBuffer(password);
+  
+  const baseKey = await crypto.subtle.importKey(
+    'raw',
+    passwordBuffer,
+    'PBKDF2',
+    false,
+    ['deriveKey']
+  );
+
+  return crypto.subtle.deriveKey(
+    {
+      name: 'PBKDF2',
+      salt,
+      iterations: 100000,
+      hash: 'SHA-256',
+    },
+    baseKey,
+    {
+      name: 'AES-GCM',
+      length: 256,
+    },
+    false,
+    ['wrapKey', 'unwrapKey']
+  );
+};
+
+export const wrapPrivateKey = async (privateKey: CryptoKey, wrappingKey: CryptoKey): Promise<{ wrappedKey: string; iv: string }> => {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const wrapped = await crypto.subtle.wrapKey(
+    'pkcs8',
+    privateKey,
+    wrappingKey,
+    {
+      name: 'AES-GCM',
+      iv
+    }
+  );
+  return {
+    wrappedKey: arrayBufferToBase64(wrapped),
+    iv: arrayBufferToBase64(iv)
+  };
+};
+
+export const unwrapPrivateKey = async (wrappedKeyBase64: string, wrappingKey: CryptoKey, ivBase64: string): Promise<CryptoKey> => {
+  const wrappedKeyBuffer = base64ToArrayBuffer(wrappedKeyBase64);
+  const iv = base64ToArrayBuffer(ivBase64);
+  return crypto.subtle.unwrapKey(
+    'pkcs8',
+    wrappedKeyBuffer,
+    wrappingKey,
+    {
+      name: 'AES-GCM',
+      iv
+    },
+    {
+      name: 'RSA-OAEP',
+      hash: 'SHA-256',
+    },
+    true,
+    ['decrypt']
+  );
+};
+
 export const encryptMessage = async (
   plaintext: string,
   recipientPublicKey: CryptoKey
