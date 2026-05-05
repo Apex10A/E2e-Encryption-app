@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import EmojiPicker, { Theme, EmojiClickData } from 'emoji-picker-react';
 import { 
   fetchConversations, 
   fetchMessages, 
@@ -11,8 +12,10 @@ import {
   fetchUsers
 } from '@/lib/api';
 import { getPrivateKey } from '@/lib/storage';
-import { decryptMessage, encryptMessage, importPublicKey } from '@/lib/crypto';
+import { decryptMessage, encryptMessageForMultiple, importPublicKey } from '@/lib/crypto';
 import { Conversation, Message, User } from '@/types';
+import Loading from '../loading';
+
 
 export default function MessagesPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -25,18 +28,165 @@ export default function MessagesPage() {
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [error, setError] = useState('');
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<User[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [socket, setSocket] = useState<WebSocket | null>(null);
   
   const router = useRouter();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const emojiPickerRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, []);
+
+  const handleSearch = useCallback(async (query: string) => {
+    if (!query.trim()) return;
+    setIsSearching(true);
+    try {
+      const results = await fetchUsers(query);
+      setSearchResults(results.filter(u => u.id !== currentUser?.id));
+    } catch (err) {
+      console.error('Search failed:', err);
+    } finally {
+      setIsSearching(false);
+    }
+  }, [currentUser]);
+
+  const loadMessages = useCallback(async (userId: string) => {
+    setLoadingMessages(true);
+    try {
+      const msgs = await fetchMessages(userId);
+      // Reverse messages to show them in chronological order (oldest to newest)
+      const chronologicalMsgs = [...msgs].reverse();
+      setMessages(chronologicalMsgs);
+      
+      // Decrypt messages
+      if (privateKey) {
+        const decrypted: Record<string, string> = {};
+        for (const msg of chronologicalMsgs) {
+          const encryptedKey = msg.from_user_id === currentUser?.id 
+            ? msg.payload.encryptedKeyForSelf 
+            : msg.payload.encryptedKey;
+          
+          try {
+            const text = await decryptMessage(
+              msg.payload.ciphertext,
+              encryptedKey,
+              msg.payload.iv,
+              privateKey
+            );
+            decrypted[msg.id] = text;
+          } catch (err) {
+            console.error('Decryption failed for message:', msg.id, err);
+            decrypted[msg.id] = '[Decryption failed]';
+          }
+        }
+        setDecryptedMessages(decrypted);
+      }
+    } catch (err) {
+      console.error('Failed to load messages:', err);
+      setError('Failed to load messages');
+    } finally {
+      setLoadingMessages(false);
+    }
+  }, [privateKey, currentUser]);
+
+  const handleIncomingMessage = useCallback(async (msg: Message) => {
+    setMessages(prev => {
+      // Avoid duplicates
+      if (prev.some(m => m.id === msg.id)) return prev;
+      return [...prev, msg];
+    });
+
+    if (privateKey) {
+      const encryptedKey = msg.from_user_id === currentUser?.id 
+        ? msg.payload.encryptedKeyForSelf 
+        : msg.payload.encryptedKey;
+      
+      try {
+        const text = await decryptMessage(
+          msg.payload.ciphertext,
+          encryptedKey,
+          msg.payload.iv,
+          privateKey
+        );
+        setDecryptedMessages(prev => ({ ...prev, [msg.id]: text }));
+      } catch (err) {
+        console.error('Decryption failed for real-time message:', msg.id, err);
+        setDecryptedMessages(prev => ({ ...prev, [msg.id]: '[Decryption failed]' }));
+      }
+    }
+
+    // Increment unread count if message is from someone else and not the current chat
+    if (msg.from_user_id !== currentUser?.id && msg.from_user_id !== selectedUserId) {
+      setUnreadCounts(prev => ({
+        ...prev,
+        [msg.from_user_id]: (prev[msg.from_user_id] || 0) + 1
+      }));
+    }
+
+    // Update conversations list to show newest on top
+    const convs = await fetchConversations();
+    setConversations(convs);
+  }, [privateKey, currentUser, selectedUserId]);
+
+  useEffect(() => {
+    const token = typeof window !== 'undefined' ? sessionStorage.getItem('access_token') : null;
+    if (!token || !currentUser) return;
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || window.location.host;
+    const host = apiUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    const wsUrl = `${protocol}//${host}/ws?token=${token}`;
+    
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      console.log('WebSocket Connected');
+      setSocket(ws);
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'message.receive') {
+          handleIncomingMessage(data.message);
+        }
+      } catch (err) {
+        console.error('Failed to parse WebSocket message:', err);
+      }
+    };
+
+    ws.onclose = () => {
+      console.log('WebSocket Disconnected');
+      setSocket(null);
+      // Optional: implement reconnect logic here
+    };
+
+    ws.onerror = (err) => {
+      console.error('WebSocket Error:', err);
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, [currentUser, handleIncomingMessage]);
 
   useEffect(() => {
     const init = async () => {
       try {
+        const token = typeof window !== 'undefined' ? sessionStorage.getItem('access_token') : null;
+        if (!token || token === 'null' || token === 'undefined') {
+          router.push('/login');
+          return;
+        }
+
         const user = await fetchMe();
         setCurrentUser(user);
         
@@ -49,12 +199,6 @@ export default function MessagesPage() {
 
         const convs = await fetchConversations();
         setConversations(convs);
-        
-        // If we have a selectedUserId but no selectedUser (e.g. from init), find it
-        if (selectedUserId && !selectedUser) {
-          const conv = convs.find(c => c.user_id === selectedUserId);
-          if (conv) setSelectedUser(conv);
-        }
         
         setLoading(false);
       } catch (err) {
@@ -70,12 +214,12 @@ export default function MessagesPage() {
     if (selectedUserId) {
       loadMessages(selectedUserId);
     }
-  }, [selectedUserId]);
+  }, [selectedUserId, loadMessages]);
 
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
       if (searchQuery.trim()) {
-        handleSearch();
+        handleSearch(searchQuery);
       } else {
         setSearchResults([]);
         setIsSearching(false);
@@ -83,22 +227,27 @@ export default function MessagesPage() {
     }, 300);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [searchQuery]);
+  }, [searchQuery, handleSearch]);
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, decryptedMessages]);
+  }, [messages, decryptedMessages, scrollToBottom]);
 
-  const handleSearch = async () => {
-    setIsSearching(true);
-    try {
-      const results = await fetchUsers(searchQuery);
-      setSearchResults(results.filter(u => u.id !== currentUser?.id));
-    } catch (err) {
-      console.error('Search failed:', err);
-    } finally {
-      setIsSearching(false);
-    }
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
+        setShowEmojiPicker(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const onEmojiClick = (emojiData: EmojiClickData) => {
+    setNewMessage(prev => prev + emojiData.emoji);
   };
 
   const selectUser = (user: User | Conversation) => {
@@ -107,39 +256,12 @@ export default function MessagesPage() {
     setSelectedUser(user);
     setSearchQuery('');
     setSearchResults([]);
-  };
-
-  const loadMessages = async (userId: string) => {
-    setLoadingMessages(true);
-    try {
-      const msgs = await fetchMessages(userId);
-      setMessages(msgs);
-      
-      // Decrypt messages
-      if (privateKey) {
-        const decrypted: Record<string, string> = { ...decryptedMessages };
-        for (const msg of msgs) {
-          if (!decrypted[msg.id]) {
-            const encryptedKey = msg.from_user_id === currentUser?.id 
-              ? msg.payload.encryptedKeyForSelf 
-              : msg.payload.encryptedKey;
-            
-            const text = await decryptMessage(
-              msg.payload.ciphertext,
-              encryptedKey,
-              msg.payload.iv,
-              privateKey
-            );
-            decrypted[msg.id] = text;
-          }
-        }
-        setDecryptedMessages(decrypted);
-      }
-    } catch (err) {
-      setError('Failed to load messages');
-    } finally {
-      setLoadingMessages(false);
-    }
+    
+    // Clear unread count for this user
+    setUnreadCounts(prev => ({
+      ...prev,
+      [id]: 0
+    }));
   };
 
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -169,14 +291,13 @@ export default function MessagesPage() {
       const myKeyInfo = await fetchPublicKey(currentUser.id);
       const myPublicKey = await importPublicKey(myKeyInfo.public_key);
 
-      const encryptedForRecipient = await encryptMessage(content, recipientPublicKey);
-      const encryptedForSelf = await encryptMessage(content, myPublicKey);
+      const encryption = await encryptMessageForMultiple(content, [recipientPublicKey, myPublicKey]);
 
       const payload = {
-        ciphertext: encryptedForRecipient.encryptedContent,
-        iv: encryptedForRecipient.iv,
-        encryptedKey: encryptedForRecipient.encryptedKey,
-        encryptedKeyForSelf: encryptedForSelf.encryptedKey
+        ciphertext: encryption.encryptedContent,
+        iv: encryption.iv,
+        encryptedKey: encryption.encryptedKeys[0],
+        encryptedKeyForSelf: encryption.encryptedKeys[1]
       };
 
       const sentMsg = await sendEncryptedMessage(selectedUserId, payload);
@@ -209,19 +330,9 @@ export default function MessagesPage() {
     router.push('/login');
   };
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-gray-100">
-        <div className="text-xl font-semibold text-gray-600">Loading...</div>
-      </div>
-    );
+    return <Loading />;
   }
-
-  const selectedConversation = conversations.find(c => c.user_id === selectedUserId);
 
   return (
     <div className="flex h-screen bg-[#0a0a0c] text-white font-sans overflow-hidden">
@@ -233,7 +344,7 @@ export default function MessagesPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
           </div>
-          <h2 className="font-bold text-xl tracking-tight">WhisperBox</h2>
+          <h2 className="font-bold text-xl tracking-tight">MutterBox</h2>
         </div>
 
         {/* Search Bar */}
@@ -306,6 +417,11 @@ export default function MessagesPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold text-sm truncate text-[#ededed] group-hover:text-white transition-colors">{conv.display_name}</div>
+                    {unreadCounts[conv.user_id] > 0 && (
+                      <div className="flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-[#4f46e5] rounded-full text-[10px] font-bold text-white shadow-lg animate-in zoom-in duration-200">
+                        {unreadCounts[conv.user_id]}
+                      </div>
+                    )}
                     <div className="text-xs text-[#9494a0] truncate">@{conv.username}</div>
                   </div>
                 </div>
@@ -454,14 +570,30 @@ export default function MessagesPage() {
                     type="text"
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
-                    placeholder="Type a secure message..."
+                    placeholder="Type a message..."
                     className="w-full bg-[#16161a] border border-[#23232a] rounded-2xl py-3.5 px-6 pr-12 text-sm focus:ring-2 focus:ring-[#4f46e5] focus:border-transparent outline-none transition-all placeholder-[#52525e]"
                     data-testid="message-input"
                   />
-                  <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[#32323a]">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2" ref={emojiPickerRef}>
+                    {showEmojiPicker && (
+                      <div className="absolute bottom-14 right-0 z-50 shadow-2xl">
+                        <EmojiPicker 
+                          onEmojiClick={onEmojiClick} 
+                          theme={Theme.DARK}
+                          autoFocusSearch={false}
+                        />
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                      className={`transition-colors ${showEmojiPicker ? 'text-[#4f46e5]' : 'text-[#32323a] hover:text-[#52525e]'}`}
+                      title="Add emoji"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </button>
                   </div>
                 </div>
                 <button
@@ -492,13 +624,13 @@ export default function MessagesPage() {
             <p className="text-[#52525e] max-w-sm mx-auto leading-relaxed">
               Your messages are protected with industry-standard end-to-end encryption. Only you and the recipient can read them.
             </p>
-            <div className="mt-10 flex items-center gap-2 px-4 py-2 bg-[#16161a] border border-[#23232a] rounded-full text-[10px] font-bold text-[#4f46e5] uppercase tracking-[0.2em]">
+            {/* <div className="mt-10 flex items-center gap-2 px-4 py-2 bg-[#16161a] border border-[#23232a] rounded-full text-[10px] font-bold text-[#4f46e5] uppercase tracking-[0.2em]">
                <span className="relative flex h-2 w-2">
                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#4f46e5] opacity-75"></span>
                  <span className="relative inline-flex rounded-full h-2 w-2 bg-[#4f46e5]"></span>
                </span>
                Encryption Active
-            </div>
+            </div> */}
           </div>
         )}
       </div>

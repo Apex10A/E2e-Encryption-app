@@ -12,7 +12,12 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showWarning, setShowWarning] = useState(false);
-  const [tempData, setTempData] = useState<any>(null);
+  const [tempData, setTempData] = useState<{
+    userId: string;
+    wrappedKey: string;
+    iv: string;
+    salt: string;
+  } | null>(null);
   const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -36,9 +41,9 @@ export default function LoginPage() {
         // Key missing - we could restore it now or just warn
         setTempData({
           userId: response.user.id,
-          wrappedKey: response.user.wrapped_private_key,
-          iv: response.user.wrapped_private_key_iv,
-          salt: response.user.pbkdf2_salt
+          wrappedKey: response.user.wrapped_private_key || '',
+          iv: response.user.wrapped_private_key_iv || '',
+          salt: response.user.pbkdf2_salt || ''
         });
         setShowWarning(true);
         setLoading(false);
@@ -46,8 +51,8 @@ export default function LoginPage() {
       }
 
       router.push('/messages');
-    } catch (err: any) {
-      setError(err.message || 'Login failed');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Login failed');
       setLoading(false);
     }
   };
@@ -71,7 +76,7 @@ export default function LoginPage() {
     <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-[#0a0a0c] text-white font-sans">
       <div className="w-full max-w-[440px] p-10 space-y-8 bg-[#16161a] rounded-xl shadow-2xl border border-[#23232a]">
         <div className="text-center space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight">WhisperBox</h1>
+          <h1 className="text-3xl font-bold tracking-tight">MutterBox</h1>
           <p className="text-[#9494a0] text-sm">Secure messaging, end-to-end encrypted</p>
         </div>
 
@@ -91,7 +96,7 @@ export default function LoginPage() {
                 Private Key Missing
               </div>
               <p className="text-sm text-yellow-200/80 leading-relaxed">
-                Your encryption key was not found on this device. You won't be able to decrypt your messages unless you restore it.
+                Your encryption key was not found on this device. You won&apos;t be able to decrypt your messages unless you restore it.
               </p>
             </div>
             
@@ -167,7 +172,7 @@ export default function LoginPage() {
           </div>
 
           <p className="text-sm text-center text-[#9494a0]">
-            Don't have an account?{' '}
+            Don&apos;t have an account?{' '}
             <a href="/signup" className="text-[#4f46e5] hover:text-[#6366f1] font-medium transition-colors">Sign up</a>
           </p>
         </div>

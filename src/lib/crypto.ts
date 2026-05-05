@@ -166,6 +166,48 @@ export const encryptMessage = async (
   };
 };
 
+export const encryptMessageForMultiple = async (
+  plaintext: string,
+  publicKeys: CryptoKey[]
+): Promise<{ encryptedContent: string; encryptedKeys: string[]; iv: string }> => {
+  const aesKey = await crypto.subtle.generateKey(
+    {
+      name: 'AES-GCM',
+      length: 256,
+    },
+    true,
+    ['encrypt']
+  );
+
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encryptedContentBuffer = await crypto.subtle.encrypt(
+    {
+      name: 'AES-GCM',
+      iv,
+    },
+    aesKey,
+    textToBuffer(plaintext)
+  );
+
+  const exportedAesKey = await crypto.subtle.exportKey('raw', aesKey);
+  
+  const encryptedKeys = await Promise.all(publicKeys.map(pubKey => 
+    crypto.subtle.encrypt(
+      {
+        name: 'RSA-OAEP',
+      },
+      pubKey,
+      exportedAesKey
+    ).then(arrayBufferToBase64)
+  ));
+
+  return {
+    encryptedContent: arrayBufferToBase64(encryptedContentBuffer),
+    encryptedKeys,
+    iv: arrayBufferToBase64(iv),
+  };
+};
+
 export const decryptMessage = async (
   encryptedContent: string,
   encryptedKey: string,

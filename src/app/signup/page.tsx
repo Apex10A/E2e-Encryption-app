@@ -60,9 +60,9 @@ export default function SignupPage() {
 
       // 8. Redirect to messages
       router.push('/messages');
-    } catch (err: any) {
+    } catch (err) {
       console.error('Signup failed:', err);
-      setError(err.message || 'Signup failed. Please try again.');
+      setError(err instanceof Error ? err.message : 'Signup failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -72,7 +72,7 @@ export default function SignupPage() {
     <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-[#0a0a0c] text-white font-sans">
       <div className="w-full max-w-[440px] p-10 space-y-8 bg-[#16161a] rounded-xl shadow-2xl border border-[#23232a]">
         <div className="text-center space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight">WhisperBox</h1>
+          <h1 className="text-3xl font-bold tracking-tight">MutterBox</h1>
           <p className="text-[#9494a0] text-sm">Secure messaging, end-to-end encrypted</p>
         </div>
         
