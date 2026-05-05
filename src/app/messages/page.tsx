@@ -212,7 +212,10 @@ export default function MessagesPage() {
 
   useEffect(() => {
     if (selectedUserId) {
-      loadMessages(selectedUserId);
+      const timeoutId = setTimeout(() => {
+        loadMessages(selectedUserId);
+      }, 0);
+      return () => clearTimeout(timeoutId);
     }
   }, [selectedUserId, loadMessages]);
 
@@ -337,8 +340,8 @@ export default function MessagesPage() {
   return (
     <div className="flex h-screen bg-[#0a0a0c] text-white font-sans overflow-hidden">
       {/* Sidebar */}
-      <div className="w-full md:w-[320px] lg:w-[380px] bg-[#111114] border-r border-[#23232a] flex flex-col shrink-0">
-        <div className="p-6 border-b border-[#23232a] flex items-center gap-3">
+      <div className={`${selectedUserId ? 'hidden' : 'flex'} md:flex w-full md:w-[320px] lg:w-[380px] bg-[#111114] border-r border-[#23232a] flex-col shrink-0`}>
+        <div className="p-4 md:p-6 border-b border-[#23232a] flex items-center gap-3">
           <div className="w-8 h-8 bg-[#4f46e5] rounded-lg flex items-center justify-center">
             <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -431,7 +434,7 @@ export default function MessagesPage() {
         </div>
 
         {/* Current User Info */}
-        <div className="p-6 border-t border-[#23232a] bg-[#0e0e11]">
+        <div className="p-4 md:p-6 border-t border-[#23232a] bg-[#0e0e11]">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-9 h-9 bg-[#23232a] border border-[#2d2d35] rounded-full flex items-center justify-center font-bold text-[#4f46e5]">
@@ -457,13 +460,21 @@ export default function MessagesPage() {
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col bg-[#0a0a0c]">
+      <div className={`${selectedUserId ? 'flex' : 'hidden'} md:flex flex-1 flex-col bg-[#0a0a0c]`}>
         {selectedUserId ? (
           <>
             {/* Chat Header */}
-            <div className="px-8 py-5 border-b border-[#23232a] bg-[#0e0e11]/80 backdrop-blur-md flex items-center justify-between sticky top-0 z-40">
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 bg-[#4f46e5] rounded-full flex items-center justify-center font-bold shadow-lg shadow-indigo-500/10">
+            <div className="px-4 md:px-8 py-5 border-b border-[#23232a] bg-[#0e0e11]/80 backdrop-blur-md flex items-center justify-between sticky top-0 z-40">
+              <div className="flex items-center gap-2 md:gap-4">
+                <button 
+                  onClick={() => setSelectedUserId(null)}
+                  className="md:hidden p-2 -ml-2 text-[#52525e] hover:text-[#ededed] transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <div className="w-10 h-10 bg-[#4f46e5] rounded-full flex items-center justify-center font-bold shadow-lg shadow-indigo-500/10 shrink-0">
                   {selectedUser?.display_name.charAt(0).toUpperCase()}
                 </div>
                 <div>
@@ -475,16 +486,14 @@ export default function MessagesPage() {
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-[#4f46e5]/10 border border-[#4f46e5]/20 rounded-full">
+              {/* <div className="flex items-center gap-2 px-3 py-1.5 bg-[#4f46e5]/10 border border-[#4f46e5]/20 rounded-full">
                 <svg className="w-3.5 h-3.5 text-[#4f46e5]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
                 <span className="text-[10px] font-bold text-[#4f46e5] uppercase tracking-widest">End-to-end encrypted</span>
-              </div>
+              </div> */}
             </div>
-
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] bg-fixed opacity-[0.98]">
+            <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-4 md:space-y-6 custom-scrollbar bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] bg-fixed opacity-[0.98]">
               {loadingMessages ? (
                 <div className="flex flex-col items-center justify-center py-20 gap-4">
                   <svg className="animate-spin h-8 w-8 text-[#4f46e5]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -563,15 +572,15 @@ export default function MessagesPage() {
             </div>
 
             {/* Input Area */}
-            <div className="p-6 bg-[#0e0e11] border-t border-[#23232a]">
-              <form onSubmit={handleSendMessage} className="max-w-4xl mx-auto flex gap-3 items-center">
+            <div className="p-4 md:p-6 bg-[#0e0e11] border-t border-[#23232a]">
+              <form onSubmit={handleSendMessage} className="max-w-4xl mx-auto flex gap-2 md:gap-3 items-center">
                 <div className="flex-1 relative">
                   <input
                     type="text"
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
                     placeholder="Type a message..."
-                    className="w-full bg-[#16161a] border border-[#23232a] rounded-2xl py-3.5 px-6 pr-12 text-sm focus:ring-2 focus:ring-[#4f46e5] focus:border-transparent outline-none transition-all placeholder-[#52525e]"
+                    className="w-full bg-[#16161a] border border-[#23232a] rounded-2xl py-3 md:py-3.5 px-4 md:px-6 pr-12 text-sm focus:ring-2 focus:ring-[#4f46e5] focus:border-transparent outline-none transition-all placeholder-[#52525e]"
                     data-testid="message-input"
                   />
                   <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2" ref={emojiPickerRef}>
@@ -599,7 +608,7 @@ export default function MessagesPage() {
                 <button
                   type="submit"
                   disabled={!newMessage.trim()}
-                  className="bg-[#4f46e5] hover:bg-[#4338ca] text-white p-3.5 rounded-2xl font-bold transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50 disabled:grayscale shrink-0"
+                  className="bg-[#4f46e5] hover:bg-[#4338ca] text-white p-3 md:p-3.5 rounded-2xl font-bold transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50 disabled:grayscale shrink-0"
                   data-testid="send-button"
                   title="Send encrypted message"
                 >
