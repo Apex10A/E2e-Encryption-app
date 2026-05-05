@@ -1,5 +1,5 @@
-const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
-  const bytes = new Uint8Array(buffer);
+const arrayBufferToBase64 = (buffer: ArrayBuffer | Uint8Array): string => {
+  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
   let binary = '';
   for (let i = 0; i < bytes.byteLength; i++) {
     binary += String.fromCharCode(bytes[i]);
@@ -17,7 +17,7 @@ const base64ToArrayBuffer = (base64: string): ArrayBuffer => {
 };
 
 const textToBuffer = (text: string): ArrayBuffer => {
-  return new TextEncoder().encode(text);
+  return new TextEncoder().encode(text).buffer;
 };
 
 const bufferToText = (buffer: ArrayBuffer): string => {
@@ -58,7 +58,7 @@ export const importPublicKey = async (base64: string): Promise<CryptoKey> => {
 
 export const generateSalt = (): string => {
   const salt = crypto.getRandomValues(new Uint8Array(16));
-  return arrayBufferToBase64(salt.buffer);  // ← add .buffer here
+  return arrayBufferToBase64(salt);
 };
 
 export const deriveWrappingKey = async (password: string, saltBase64: string): Promise<CryptoKey> => {
