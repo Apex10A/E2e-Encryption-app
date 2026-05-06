@@ -37,10 +37,14 @@ export default function MessagesPage() {
   const [searchResults, setSearchResults] = useState<User[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [socket, setSocket] = useState<WebSocket | null>(null);
+  const [isSocketConnected, setIsSocketConnected] = useState(false);
+  const [hasNewMessageAlert, setHasNewMessageAlert] = useState(false);
   
   const router = useRouter();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
+  const messagesRef = useRef<Message[]>([]);
+  const totalUnread = Object.values(unreadCounts).reduce((sum, count) => sum + count, 0);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -74,16 +78,30 @@ export default function MessagesPage() {
   }, []);
 
   const handleIncomingMessage = useCallback(async (msg: Message) => {
-    setMessages(prev => {
-      if (prev.some(m => m.id === msg.id)) return prev;
-      return [...prev, msg];
-    });
+    const selectedId = selectedUserId ? String(selectedUserId) : null;
+    const currentId = currentUser ? String(currentUser.id) : null;
+    const senderId = String(msg.from_user_id);
+    const recipientId = String(msg.to_user_id);
+    const isForSelectedConversation =
+      !!selectedId &&
+      ((senderId === selectedId && recipientId === currentId) ||
+        (recipientId === selectedId && senderId === currentId));
+
+    if (isForSelectedConversation) {
+      setMessages(prev => {
+        if (prev.some(m => String(m.id) === String(msg.id))) return prev;
+        return [...prev, msg];
+      });
+      if (document.hidden && senderId === selectedId) {
+        setHasNewMessageAlert(true);
+      }
+    }
 
     // Increment unread count if message is from someone else and not the current chat
-    if (msg.from_user_id !== currentUser?.id && msg.from_user_id !== selectedUserId) {
+    if (senderId !== currentId && senderId !== selectedId) {
       setUnreadCounts(prev => ({
         ...prev,
-        [msg.from_user_id]: (prev[msg.from_user_id] || 0) + 1
+        [senderId]: (prev[senderId] || 0) + 1
       }));
     }
 
@@ -91,6 +109,10 @@ export default function MessagesPage() {
     const convs = await fetchConversations();
     setConversations(convs);
   }, [currentUser, selectedUserId]);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   useEffect(() => {
     const token = typeof window !== 'undefined' ? sessionStorage.getItem('access_token') : null;
@@ -106,6 +128,7 @@ export default function MessagesPage() {
     ws.onopen = () => {
       console.log('WebSocket Connected');
       setSocket(ws);
+      setIsSocketConnected(true);
     };
 
     ws.onmessage = (event) => {
@@ -122,6 +145,7 @@ export default function MessagesPage() {
     ws.onclose = () => {
       console.log('WebSocket Disconnected');
       setSocket(null);
+      setIsSocketConnected(false);
       // Optional: implement reconnect logic here
     };
 
@@ -133,6 +157,66 @@ export default function MessagesPage() {
       ws.close();
     };
   }, [currentUser, handleIncomingMessage]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const syncFromServer = async () => {
+      try {
+        const convs = await fetchConversations();
+        setConversations(convs);
+
+        if (!selectedUserId) return;
+
+        const latest = await fetchMessages(selectedUserId);
+        const chronological = [...latest].reverse();
+        const previousIds = new Set(messagesRef.current.map(m => String(m.id)));
+        const selectedId = String(selectedUserId);
+        const currentId = String(currentUser.id);
+        const incomingInSelected = chronological.filter(
+          (m) =>
+            !previousIds.has(String(m.id)) &&
+            String(m.from_user_id) === selectedId &&
+            String(m.to_user_id) === currentId
+        );
+
+        if (incomingInSelected.length > 0 && document.hidden) {
+          setHasNewMessageAlert(true);
+        }
+
+        setMessages((prev) => {
+          const optimistic = prev.filter((m) => String(m.id).startsWith('temp-'));
+          const serverIds = new Set(chronological.map((m) => String(m.id)));
+          const stillPending = optimistic.filter((m) => !serverIds.has(String(m.id)));
+          return [...chronological, ...stillPending];
+        });
+      } catch (err) {
+        console.error('Background sync failed:', err);
+      }
+    };
+
+    const intervalId = setInterval(syncFromServer, 5000);
+    return () => clearInterval(intervalId);
+  }, [currentUser, selectedUserId]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.title = totalUnread > 0 ? `(${totalUnread}) MutterBox` : 'MutterBox';
+    return () => {
+      document.title = 'MutterBox';
+    };
+  }, [totalUnread]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        setHasNewMessageAlert(false);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
 
   // Decrypt whenever the thread or crypto material changes (fixes race where loadMessages ran before privateKey existed).
   useEffect(() => {
@@ -271,6 +355,7 @@ export default function MessagesPage() {
       ...prev,
       [id]: 0
     }));
+    setHasNewMessageAlert(false);
   };
 
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -356,7 +441,18 @@ export default function MessagesPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
           </div>
-          <h2 className="font-bold text-xl tracking-tight">MutterBox</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="font-bold text-xl tracking-tight">MutterBox</h2>
+            {totalUnread > 0 && (
+              <span className="min-w-[20px] h-5 px-1.5 bg-[#4f46e5] rounded-full text-[10px] font-bold text-white flex items-center justify-center">
+                {totalUnread}
+              </span>
+            )}
+            <span
+              className={`w-2 h-2 rounded-full ${isSocketConnected ? 'bg-emerald-400' : 'bg-amber-400'}`}
+              title={isSocketConnected ? 'Live updates connected' : 'Using background sync'}
+            />
+          </div>
         </div>
 
         {/* Search Bar */}
@@ -428,17 +524,19 @@ export default function MessagesPage() {
                     {conv.display_name.charAt(0).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center justify-between gap-2">
                       <div className="font-semibold text-sm truncate text-[#ededed] group-hover:text-white transition-colors">{conv.display_name}</div>
-                      <svg className="w-3 h-3 text-[#52525e]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                      </svg>
-                    </div>
-                    {unreadCounts[conv.user_id] > 0 && (
-                      <div className="flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-[#4f46e5] rounded-full text-[10px] font-bold text-white shadow-lg animate-in zoom-in duration-200">
-                        {unreadCounts[conv.user_id]}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {unreadCounts[conv.user_id] > 0 && (
+                          <div className="flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-[#4f46e5] rounded-full text-[10px] font-bold text-white shadow-lg animate-in zoom-in duration-200">
+                            {unreadCounts[conv.user_id]}
+                          </div>
+                        )}
+                        <svg className="w-3 h-3 text-[#52525e]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
                       </div>
-                    )}
+                    </div>
                     <div className="text-xs text-[#9494a0] truncate">@{conv.username}</div>
                   </div>
                 </div>
@@ -498,6 +596,12 @@ export default function MessagesPage() {
                   <div className="text-xs text-[#52525e] font-medium">
                     @{selectedUser?.username}
                   </div>
+                  {hasNewMessageAlert && (
+                    <div className="mt-1 inline-flex items-center gap-1.5 px-2 py-0.5 bg-[#4f46e5]/20 border border-[#4f46e5]/40 rounded-full text-[10px] text-[#c7d2fe] font-semibold uppercase tracking-wider">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#818cf8] animate-pulse" />
+                      New message
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-2 px-3 py-1.5 bg-[#4f46e5]/10 border border-[#4f46e5]/20 rounded-full">
