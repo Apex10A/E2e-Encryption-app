@@ -73,7 +73,7 @@ export default function SignupPage() {
       <div className="w-full max-w-[440px] p-10 space-y-8 bg-[#16161a] rounded-xl shadow-2xl border border-[#23232a]">
         <div className="text-center space-y-2">
           <h1 className="text-3xl font-bold tracking-tight">MutterBox</h1>
-          <p className="text-[#9494a0] text-sm">Secure messaging, end-to-end encrypted</p>
+          <p className="text-[#9494a0] text-sm">Welcome, Create your account</p>
         </div>
         
         {error && (
