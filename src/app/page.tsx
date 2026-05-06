@@ -7,19 +7,15 @@ export default function Home() {
         
         <div className="flex flex-col items-center space-y-6">
           <div className="flex items-center gap-4">
-            {/* <div className="w-12 h-12 bg-indigo-600/20 border border-indigo-500/30 rounded-xl flex items-center justify-center">
-              <svg className="w-6 h-6 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
-            </div> */}
             <h1 className="text-4xl font-bold tracking-tight">MutterBox</h1>
           </div>
-          <p className="text-[#9494a0] text-lg text-center max-w-2xl">
-            Secure, end-to-end encrypted messaging that respects your privacy
+          <p className="text-[#9494a0] text-md sm:text-lg text-center max-w-2xl">
+            Hi, Welcome to MutterBox. 
+            MutterBox is a secure, end-to-end encrypted messaging that respects your privacy
           </p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6 w-full">
+        {/* <div className="grid md:grid-cols-3 gap-6 w-full">
           <div className="bg-[#16161a] border border-[#23232a] p-8 rounded-2xl space-y-4">
             <svg className="w-6 h-6 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -49,7 +45,7 @@ export default function Home() {
               Clean, minimal interface designed for security-conscious users.
             </p>
           </div>
-        </div>
+        </div> */}
 
         <div className="flex flex-col items-center space-y-8 pt-4">
           <div className="flex gap-4">
@@ -80,7 +76,11 @@ export default function Home() {
 
         <footer className="pt-16 border-t border-[#23232a] w-full text-center">
           <p className="text-[#9494a0] text-xs tracking-widest uppercase">
-            MutterBox • Secure Messaging • Built for Privacy
+            MutterBox 2026. Built by  
+            
+            <Link href="https://github.com/praiseafolabi" className="font-bold text-white">
+               {" Praise Afolabi "}
+            </Link>
           </p>
         </footer>
       </main>

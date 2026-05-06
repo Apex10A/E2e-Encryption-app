@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { loginUser } from '@/lib/api';
+import { fetchMe, loginUser } from '@/lib/api';
 import { getPrivateKey, savePrivateKey } from '@/lib/storage';
 import { deriveWrappingKey, unwrapPrivateKey } from '@/lib/crypto';
 
@@ -11,45 +11,48 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [showWarning, setShowWarning] = useState(false);
-  const [tempData, setTempData] = useState<{
-    userId: string;
-    wrappedKey: string;
-    iv: string;
-    salt: string;
-  } | null>(null);
   const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
-    setShowWarning(false);
 
     try {
       const response = await loginUser({ username, password });
-      
-      // Store tokens
+
       sessionStorage.setItem('access_token', response.access_token);
       sessionStorage.setItem('refresh_token', response.refresh_token);
       sessionStorage.setItem('user_id', response.user.id);
 
-      // Check IndexedDB for private key
       const existingKey = await getPrivateKey(response.user.id);
-      
+
       if (!existingKey) {
-        // Key missing - we could restore it now or just warn
-        setTempData({
-          userId: response.user.id,
-          wrappedKey: response.user.wrapped_private_key || '',
-          iv: response.user.wrapped_private_key_iv || '',
-          salt: response.user.pbkdf2_salt || ''
-        });
-        setShowWarning(true);
-        setLoading(false);
-        return;
+        let wrapped = response.user.wrapped_private_key;
+        let salt = response.user.pbkdf2_salt;
+        let iv = response.user.wrapped_private_key_iv;
+        if (!wrapped || !salt || !iv) {
+          try {
+            const me = await fetchMe();
+            wrapped = wrapped ?? me.wrapped_private_key;
+            salt = salt ?? me.pbkdf2_salt;
+            iv = iv ?? me.wrapped_private_key_iv;
+          } catch {
+            /* use login payload only */
+          }
+        }
+        try {
+          if (wrapped && salt && iv) {
+            const wrappingKey = await deriveWrappingKey(password, salt);
+            const privateKey = await unwrapPrivateKey(wrapped, wrappingKey, iv);
+            await savePrivateKey(response.user.id, privateKey);
+          }
+        } catch (err) {
+          console.warn('Could not restore private key:', err);
+        }
       }
 
+      setLoading(false);
       router.push('/messages');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
@@ -57,24 +60,9 @@ export default function LoginPage() {
     }
   };
 
-  const handleRestoreAndProceed = async () => {
-    setLoading(true);
-    try {
-      if (tempData && tempData.wrappedKey && tempData.salt && tempData.iv) {
-        const wrappingKey = await deriveWrappingKey(password, tempData.salt);
-        const privateKey = await unwrapPrivateKey(tempData.wrappedKey, wrappingKey, tempData.iv);
-        await savePrivateKey(tempData.userId, privateKey);
-      }
-      router.push('/messages');
-    } catch (err) {
-      setError('Failed to restore private key. You may not be able to read old messages.');
-      setLoading(false);
-    }
-  };
-
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-[#0a0a0c] text-white font-sans">
-      <div className="w-full max-w-[440px] p-10 space-y-8 bg-[#16161a] rounded-xl shadow-2xl border border-[#23232a]">
+      <div className="w-full max-w-[440px] p-10  space-y-8 bg-[#16161a] rounded-xl shadow-2xl border border-[#23232a]">
         <div className="text-center space-y-2">
           <h1 className="text-3xl font-bold tracking-tight">MutterBox</h1>
           <p className="text-[#9494a0] text-sm">Please login to your acount.</p>
@@ -86,38 +74,7 @@ export default function LoginPage() {
           </div>
         )}
 
-        {showWarning ? (
-          <div className="space-y-6">
-            <div className="p-4 bg-yellow-900/20 border border-yellow-700/50 rounded-lg space-y-2">
-              <div className="flex items-center gap-2 text-yellow-500 font-bold">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                Private Key Missing
-              </div>
-              <p className="text-sm text-yellow-200/80 leading-relaxed">
-                Your encryption key was not found on this device. You won&apos;t be able to decrypt your messages unless you restore it.
-              </p>
-            </div>
-            
-            <div className="space-y-3">
-              <button
-                onClick={handleRestoreAndProceed}
-                disabled={loading}
-                className="w-full py-3 px-4 text-white bg-[#4f46e5] hover:bg-[#4338ca] rounded-lg font-semibold transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50"
-              >
-                {loading ? 'Restoring...' : 'Restore Key & Continue'}
-              </button>
-              <button
-                onClick={() => router.push('/messages')}
-                className="w-full py-3 px-4 text-[#c0c0cf] bg-[#23232a] hover:bg-[#2d2d35] rounded-lg font-medium transition-all"
-              >
-                Continue Without Decryption
-              </button>
-            </div>
-          </div>
-        ) : (
-          <form onSubmit={handleLogin} className="space-y-6">
+        <form onSubmit={handleLogin} className="space-y-6">
             <div className="space-y-2">
               <label className="block text-sm font-medium text-[#c0c0cf]">Username</label>
               <input
@@ -161,7 +118,6 @@ export default function LoginPage() {
               ) : 'Sign In'}
             </button>
           </form>
-        )}
 
         <div className="pt-6 space-y-4 border-t border-[#2d2d35]">
           <div className="p-4 bg-[#4f46e5]/5 border border-[#4f46e5]/10 rounded-xl space-y-2">

@@ -63,66 +63,21 @@ export default function MessagesPage() {
     setLoadingMessages(true);
     try {
       const msgs = await fetchMessages(userId);
-      // Reverse messages to show them in chronological order (oldest to newest)
       const chronologicalMsgs = [...msgs].reverse();
       setMessages(chronologicalMsgs);
-      
-      // Decrypt messages
-      if (privateKey) {
-        const decrypted: Record<string, string> = {};
-        for (const msg of chronologicalMsgs) {
-          const encryptedKey = msg.from_user_id === currentUser?.id 
-            ? msg.payload.encryptedKeyForSelf 
-            : msg.payload.encryptedKey;
-          
-          try {
-            const text = await decryptMessage(
-              msg.payload.ciphertext,
-              encryptedKey,
-              msg.payload.iv,
-              privateKey
-            );
-            decrypted[msg.id] = text;
-          } catch (err) {
-            console.error('Decryption failed for message:', msg.id, err);
-            decrypted[msg.id] = '[Decryption failed]';
-          }
-        }
-        setDecryptedMessages(decrypted);
-      }
     } catch (err) {
       console.error('Failed to load messages:', err);
       setError('Failed to load messages');
     } finally {
       setLoadingMessages(false);
     }
-  }, [privateKey, currentUser]);
+  }, []);
 
   const handleIncomingMessage = useCallback(async (msg: Message) => {
     setMessages(prev => {
-      // Avoid duplicates
       if (prev.some(m => m.id === msg.id)) return prev;
       return [...prev, msg];
     });
-
-    if (privateKey) {
-      const encryptedKey = msg.from_user_id === currentUser?.id 
-        ? msg.payload.encryptedKeyForSelf 
-        : msg.payload.encryptedKey;
-      
-      try {
-        const text = await decryptMessage(
-          msg.payload.ciphertext,
-          encryptedKey,
-          msg.payload.iv,
-          privateKey
-        );
-        setDecryptedMessages(prev => ({ ...prev, [msg.id]: text }));
-      } catch (err) {
-        console.error('Decryption failed for real-time message:', msg.id, err);
-        setDecryptedMessages(prev => ({ ...prev, [msg.id]: '[Decryption failed]' }));
-      }
-    }
 
     // Increment unread count if message is from someone else and not the current chat
     if (msg.from_user_id !== currentUser?.id && msg.from_user_id !== selectedUserId) {
@@ -135,7 +90,7 @@ export default function MessagesPage() {
     // Update conversations list to show newest on top
     const convs = await fetchConversations();
     setConversations(convs);
-  }, [privateKey, currentUser, selectedUserId]);
+  }, [currentUser, selectedUserId]);
 
   useEffect(() => {
     const token = typeof window !== 'undefined' ? sessionStorage.getItem('access_token') : null;
@@ -179,6 +134,60 @@ export default function MessagesPage() {
     };
   }, [currentUser, handleIncomingMessage]);
 
+  // Decrypt whenever the thread or crypto material changes (fixes race where loadMessages ran before privateKey existed).
+  useEffect(() => {
+    if (messages.length === 0) return;
+
+    let cancelled = false;
+
+    (async () => {
+      const updates: Record<string, string> = {};
+
+      for (const msg of messages) {
+        const id = String(msg.id);
+        if (id.startsWith('temp-')) continue;
+
+        if (!privateKey || !currentUser) {
+          updates[id] =
+            '[Encryption unavailable on this device — log out and sign in again with your password.]';
+          continue;
+        }
+
+        const encryptedKey =
+          String(msg.from_user_id) === String(currentUser.id)
+            ? msg.payload.encryptedKeyForSelf
+            : msg.payload.encryptedKey;
+
+        try {
+          const text = await decryptMessage(
+            msg.payload.ciphertext,
+            encryptedKey,
+            msg.payload.iv,
+            privateKey,
+          );
+          updates[id] = text;
+        } catch (err) {
+          console.error('Decryption failed for message:', msg.id, err);
+          updates[id] = '[Decryption failed]';
+        }
+      }
+
+      if (cancelled) return;
+
+      setDecryptedMessages((prev) => {
+        const next = { ...prev };
+        for (const [id, text] of Object.entries(updates)) {
+          next[id] = text;
+        }
+        return next;
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [messages, privateKey, currentUser]);
+
   useEffect(() => {
     const init = async () => {
       try {
@@ -190,12 +199,8 @@ export default function MessagesPage() {
 
         const user = await fetchMe();
         setCurrentUser(user);
-        
+
         const key = await getPrivateKey(user.id);
-        if (!key) {
-          router.push('/login');
-          return;
-        }
         setPrivateKey(key);
 
         const convs = await fetchConversations();
@@ -547,7 +552,7 @@ export default function MessagesPage() {
                           data-testid={`message-${msg.id}`}
                         >
                           <div className="text-sm leading-relaxed whitespace-pre-wrap break-words">
-                            {decryptedMessages[msg.id] || (
+                            {decryptedMessages[String(msg.id)] || (
                               <span className="flex items-center gap-2 italic opacity-60">
                                 <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
                                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
