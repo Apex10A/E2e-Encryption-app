@@ -30,6 +30,7 @@ export default function MessagesPage() {
   const [loading, setLoading] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [error, setError] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   
@@ -558,7 +559,7 @@ export default function MessagesPage() {
               </div>
             </div>
             <button 
-              onClick={handleLogout}
+              onClick={() => setShowLogoutModal(true)}
               className="p-2 text-[#52525e] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all"
               title="Logout"
               data-testid="logout-button"
@@ -570,6 +571,35 @@ export default function MessagesPage() {
           </div>
         </div>
       </div>
+
+      {/* Logout Confirmation Modal */}
+      {showLogoutModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-sm bg-[#16161a] border border-[#23232a] rounded-2xl shadow-2xl p-6 animate-in zoom-in-95 duration-200">
+            <div className="flex flex-col items-center text-center space-y-4">
+             
+              <div>
+                <h3 className="text-xl font-bold text-white">Sign Out?</h3>
+                <p className="text-sm text-[#9494a0] mt-1">You will need your password to re-unlock your private key on your next visit.</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3 w-full pt-2">
+                <button
+                  onClick={() => setShowLogoutModal(false)}
+                  className="px-4 py-2.5 bg-[#23232a] hover:bg-[#2d2d35] text-white rounded-xl font-semibold transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="px-4 py-2.5 cursor-pointer bg-red-500 hover:bg-red-600 text-white rounded-xl font-semibold transition-all shadow-lg shadow-red-500/20"
+                >
+                  Sign Out
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Chat Area */}
       <div className={`${selectedUserId ? 'flex' : 'hidden'} md:flex flex-1 flex-col bg-[#0a0a0c]`}>
