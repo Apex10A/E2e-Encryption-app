@@ -77,8 +77,7 @@ export default function Home() {
         <footer className="pt-16 border-t border-[#23232a] w-full text-center">
           <p className="text-[#9494a0] text-xs tracking-widest uppercase">
             MutterBox 2026. Built by  
-            
-            <Link href="https://github.com/praiseafolabi" className="font-bold text-white">
+            <Link href="https://praise-ngvu.vercel.app/" className="font-bold text-white">
                {" Praise Afolabi "}
             </Link>
           </p>

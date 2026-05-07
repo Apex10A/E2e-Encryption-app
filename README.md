@@ -5,7 +5,6 @@ A **Next.js** chat client where the server only ever stores ciphertext. Plain En
 ---
 
 
-
 - **Messages are encrypted on the device** before they are sent.
 - **The server only stores scrambled data** — it never sees readable message text.
 - **Only the person you are chatting with** can decrypt what you sent (plus you, on your own devices, using your keys).
