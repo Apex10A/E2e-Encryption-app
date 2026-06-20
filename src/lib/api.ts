@@ -1,13 +1,26 @@
 import { AuthResponse, Message, User, Conversation } from '../types';
 
-const getBaseUrl = () => {
-  const url = process.env.NEXT_PUBLIC_API_URL || '';
+export const getExternalApiUrl = () => {
+  const url = process.env.NEXT_PUBLIC_API_URL || 'https://whisperbox.koyeb.app';
   return url.endsWith('/') ? url.slice(0, -1) : url;
 };
 
-const BASE_URL = getBaseUrl();
+/** Same-origin proxy in the browser — avoids CORS against the remote API. */
+export const getApiBaseUrl = () => {
+  if (typeof window !== 'undefined') return '/api';
+  return getExternalApiUrl();
+};
 
-// Version: 1.0.2 - Using absolute URL and fixed double slashes
+function formatFetchError(err: unknown): Error {
+  if (err instanceof TypeError) {
+    return new Error(
+      'Cannot reach the messaging server. It may be offline — check NEXT_PUBLIC_API_URL or try again later.'
+    );
+  }
+  if (err instanceof Error) return err;
+  return new Error('Something went wrong. Please try again.');
+}
+
 let isRefreshing = false;
 let refreshSubscribers: ((token: string) => void)[] = [];
 
@@ -38,6 +51,7 @@ async function apiFetch<T>(
 
   const token = getAccessToken();
   const isAuthRequest = endpoint.includes('/auth/login') || endpoint.includes('/auth/register');
+  const baseUrl = getApiBaseUrl();
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -45,12 +59,16 @@ async function apiFetch<T>(
     ...(options.headers as Record<string, string> || {}),
   };
 
-  const response = await fetch(`${BASE_URL}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}${endpoint}`, {
+      ...options,
+      headers,
+    });
+  } catch (err) {
+    throw formatFetchError(err);
+  }
 
-  // Handle 401 Unauthorized
   if (response.status === 401 && !endpoint.includes('/auth/login') && !endpoint.includes('/auth/refresh') && !endpoint.includes('/auth/register')) {
     const refreshToken = getRefreshToken();
     
@@ -68,13 +86,18 @@ async function apiFetch<T>(
     if (!isRefreshing) {
       isRefreshing = true;
       try {
-        const refreshResponse = await fetch(`${BASE_URL}/auth/refresh`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ refresh_token: refreshToken }),
-        });
+        let refreshResponse: Response;
+        try {
+          refreshResponse = await fetch(`${baseUrl}/auth/refresh`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ refresh_token: refreshToken }),
+          });
+        } catch (err) {
+          throw formatFetchError(err);
+        }
 
         if (!refreshResponse.ok) {
           throw new Error('Failed to refresh token');
@@ -96,7 +119,7 @@ async function apiFetch<T>(
             window.location.replace('/login');
           }
         }
-        throw new Error('Unauthorized');
+        throw err instanceof Error ? err : new Error('Unauthorized');
       }
     }
 
@@ -119,7 +142,9 @@ async function apiFetch<T>(
     const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
     let errorMessage = 'API request failed';
     
-    if (typeof errorData.detail === 'string') {
+    if (response.status === 404) {
+      errorMessage = 'The messaging server is not available. It may need to be redeployed.';
+    } else if (typeof errorData.detail === 'string') {
       errorMessage = errorData.detail;
     } else if (Array.isArray(errorData.detail)) {
       errorMessage = errorData.detail.map((err: { msg: string }) => err.msg).join(', ');
