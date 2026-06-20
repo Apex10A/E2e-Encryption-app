@@ -120,7 +120,7 @@ export default function MessagesPage() {
     if (!token || !currentUser) return;
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || window.location.host;
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://whisperbox.koyeb.app';
     const host = apiUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
     const wsUrl = `${protocol}//${host}/ws?token=${token}`;
     
