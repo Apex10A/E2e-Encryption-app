@@ -2,87 +2,116 @@ import Link from "next/link";
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-[#0a0a0c] text-white flex flex-col items-center justify-center p-6 font-sans">
-      <main className="max-w-4xl w-full space-y-12 flex flex-col items-center">
-        
-        <div className="flex flex-col items-center space-y-6">
-          <div className="flex items-center gap-4">
-            <h1 className="text-4xl font-bold tracking-tight">MutterBox</h1>
+    <div className="relative min-h-screen overflow-hidden bg-[#0a0a0c] text-white font-sans">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(79,70,229,0.22),transparent)]"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-32 top-1/3 h-[420px] w-[420px] rounded-full bg-indigo-600/10 blur-[120px]"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -left-24 bottom-0 h-[320px] w-[320px] rounded-full bg-violet-600/8 blur-[100px]"
+      />
+
+      <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-6 py-8">
+        <span className="text-lg font-semibold tracking-tight">MutterBox</span>
+        <Link
+          href="/login"
+          className="text-sm text-[#9494a0] transition-colors hover:text-white"
+        >
+          Sign in
+        </Link>
+      </header>
+
+      <main className="relative z-10 mx-auto flex min-h-[calc(100vh-180px)] max-w-6xl flex-col justify-center px-6 pb-16 pt-8">
+        <div className="grid items-center gap-16 lg:grid-cols-[1.1fr_0.9fr] lg:gap-12">
+          <div className="max-w-xl space-y-8">
+            <div className="space-y-5">
+              <p className="text-sm font-medium uppercase tracking-[0.2em] text-indigo-400/90">
+                End-to-end encrypted
+              </p>
+              <h1 className="text-4xl font-bold leading-[1.08] tracking-tight sm:text-5xl lg:text-6xl">
+                Your conversations,{" "}
+                <span className="bg-gradient-to-r from-indigo-300 via-indigo-400 to-violet-300 bg-clip-text text-transparent">
+                  truly private.
+                </span>
+              </h1>
+              <p className="max-w-md text-lg leading-relaxed text-[#9494a0]">
+                Messages are encrypted on your device before they leave. The
+                server only ever sees ciphertext.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <Link
+                href="/signup"
+                className="rounded-xl bg-[#4f46e5] px-7 py-3.5 text-sm font-semibold text-white shadow-lg shadow-indigo-950/40 transition-colors hover:bg-[#4338ca]"
+              >
+                Get started
+              </Link>
+              <Link
+                href="/login"
+                className="rounded-xl border border-[#2d2d35] bg-[#111114]/80 px-7 py-3.5 text-sm font-semibold text-white backdrop-blur-sm transition-colors hover:border-[#3d3d48] hover:bg-[#16161a]"
+              >
+                Sign in
+              </Link>
+            </div>
           </div>
-          <p className="text-[#9494a0] text-md sm:text-lg text-center max-w-2xl">
-            Hi, Welcome to MutterBox. 
-            MutterBox is a secure, end-to-end encrypted messaging that respects your privacy
-          </p>
+
+          <div className="relative mx-auto w-full max-w-md lg:max-w-none">
+            <div
+              aria-hidden
+              className="absolute inset-4 rounded-3xl bg-indigo-500/10 blur-2xl"
+            />
+            <div className="relative overflow-hidden rounded-3xl border border-[#23232a] bg-[#111114]/90 p-6 shadow-2xl shadow-black/40 backdrop-blur-sm">
+              <div className="mb-6 flex items-center justify-between border-b border-[#23232a] pb-4">
+                <div>
+                  <p className="text-sm font-medium text-white">Secure thread</p>
+                  <p className="text-xs text-[#52525e]">Encrypted on device</p>
+                </div>
+                <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-400">
+                  E2EE
+                </span>
+              </div>
+
+              <div className="space-y-4 font-mono text-xs leading-relaxed">
+                <div className="rounded-2xl rounded-tl-md bg-[#16161a] px-4 py-3 text-[#9494a0]">
+                  <span className="text-[#52525e]">ciphertext:</span>{" "}
+                  U2FsdGVkX1+8k3mR9pL2nQ7vH4xW1yT6...
+                </div>
+                <div className="ml-auto max-w-[85%] rounded-2xl rounded-tr-md border border-indigo-500/20 bg-indigo-950/40 px-4 py-3 text-indigo-100/90">
+                  Hey — are we still on for tonight?
+                </div>
+                <div className="rounded-2xl rounded-tl-md bg-[#16161a] px-4 py-3 text-[#9494a0]">
+                  <span className="text-[#52525e]">ciphertext:</span>{" "}
+                  U2FsdGVkX1+qW8nF3jK5mP9rL2xV7...
+                </div>
+              </div>
+
+              <div className="mt-6 border-t border-[#23232a] pt-4">
+                <div className="h-10 rounded-xl border border-[#23232a] bg-[#0a0a0c]/60 px-4 flex items-center text-xs text-[#52525e]">
+                  Type a message — encrypted before send
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-
-        {/* <div className="grid md:grid-cols-3 gap-6 w-full">
-          <div className="bg-[#16161a] border border-[#23232a] p-8 rounded-2xl space-y-4">
-            <svg className="w-6 h-6 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
-            <h3 className="text-lg font-bold">End-to-End Encryption</h3>
-            <p className="text-[#9494a0] text-sm leading-relaxed">
-              Your messages are encrypted on your device. Only you and the recipient can read them.
-            </p>
-          </div>
-
-          <div className="bg-[#16161a] border border-[#23232a] p-8 rounded-2xl space-y-4">
-            <svg className="w-6 h-6 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-            </svg>
-            <h3 className="text-lg font-bold">Maximum Privacy</h3>
-            <p className="text-[#9494a0] text-sm leading-relaxed">
-              We never store, see, or access your messages. Zero-knowledge architecture.
-            </p>
-          </div>
-
-          <div className="bg-[#16161a] border border-[#23232a] p-8 rounded-2xl space-y-4">
-            <svg className="w-6 h-6 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-            </svg>
-            <h3 className="text-lg font-bold">Secure Messaging</h3>
-            <p className="text-[#9494a0] text-sm leading-relaxed">
-              Clean, minimal interface designed for security-conscious users.
-            </p>
-          </div>
-        </div> */}
-
-        <div className="flex flex-col items-center space-y-8 pt-4">
-          <div className="flex gap-4">
-            <Link 
-              href="/signup" 
-              className="px-8 py-3 bg-[#4f46e5] hover:bg-[#4338ca] text-white font-semibold rounded-lg transition-all"
-            >
-              Get Started
-            </Link>
-            <Link 
-              href="/login" 
-              className="px-8 py-3 bg-[#16161a] border border-[#23232a] hover:bg-[#1c1c21] text-white font-semibold rounded-lg transition-all"
-            >
-              Sign In
-            </Link>
-          </div>
-
-          <div className="flex flex-col items-center space-y-4">
-            <span className="text-[#9494a0] text-sm">Or view the app demo:</span>
-            <Link 
-              href="/messages" 
-              className="px-8 py-3 bg-transparent border border-[#23232a] hover:bg-[#16161a] text-white font-semibold rounded-lg transition-all"
-            >
-              View Messages Demo
-            </Link>
-          </div>
-        </div>
-
-        <footer className="pt-16 border-t border-[#23232a] w-full text-center">
-          <p className="text-[#9494a0] text-xs tracking-widest uppercase">
-            MutterBox 2026. Built by  
-            <Link href="https://praise-ngvu.vercel.app/" className="font-bold text-white">
-               {" Praise Afolabi "}
-            </Link>
-          </p>
-        </footer>
       </main>
+
+      <footer className="relative z-10 border-t border-[#23232a]/80 px-6 py-8 text-center">
+        <p className="text-xs text-[#52525e]">
+          MutterBox · Built by{" "}
+          <Link
+            href="https://praise-ngvu.vercel.app/"
+            className="text-[#9494a0] transition-colors hover:text-white"
+          >
+            Praise Afolabi
+          </Link>
+        </p>
+      </footer>
     </div>
   );
 }
